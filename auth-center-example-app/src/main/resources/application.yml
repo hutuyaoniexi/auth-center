@@ -1,0 +1,30 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: auth-center-example-app
+
+auth:
+  center:
+    ignore-paths:
+      - "/auth/login"
+      - "/auth/refresh"
+    method:
+      require-perm: false   # 关闭你自定义 @RequirePerm 的 AOP（只影响它，不影响 @PreAuthorize）
+  jwt:
+    issuer: "auth-center-demo"
+    audience:
+      - "example-app"
+    secret: "0123456789abcdef0123456789abcdef"
+    access-ttl-seconds: 1800
+    refresh-enabled: true
+    refresh-ttl-seconds: 604800
+    clock-skew-seconds: 30
+
+
+
+
+#logging:
+#  level:
+#    org.springframework.boot.autoconfigure: DEBUG

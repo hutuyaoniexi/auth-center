@@ -1,0 +1,72 @@
+### 1. 未登录访问（应返回 401）
+GET http://localhost:8080/api/user/me
+
+###
+
+### 2. 携带非法 Token（应返回 401）
+GET http://localhost:8080/api/user/me
+Authorization: Bearer abc.def.xxx
+
+###
+
+
+### 3.登录（user）
+POST http://localhost:8080/auth/login
+Content-Type: application/json
+
+{
+  "username": "user",
+  "password": "123456"
+}
+
+### 4.登录（admin）
+POST http://localhost:8080/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "123456"
+}
+
+###
+@token = eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJhdXRoLWNlbnRlci1kZW1vIiwic3ViIjoiMiIsImp0aSI6ImI1ZTUyMThkLWY3NzAtNDQyMS05N2U0LTkxZmY0NWE2ZTIzOCIsImlhdCI6MTc2OTY4MjU5MCwiZXhwIjoxNzY5Njg0MzkwLCJ0eXAiOiJhY2Nlc3MiLCJhdWQiOlsiZXhhbXBsZS1hcHAiXSwidXNlcm5hbWUiOiJ1c2VyIiwicm9sZXMiOlsidXNlcjpxdWVyeSIsIlJPTEVfVVNFUiJdfQ.apDNEnyksIG_DRg6HQtu83FZUtk9ZGIINXtmG2wS6eM
+@refresh_token = eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJhdXRoLWNlbnRlci1kZW1vIiwic3ViIjoiMSIsImp0aSI6IjVhMDhkYTA0LTViMzgtNDdjNS05ZDhkLTI0NzFlMWY0MjQzZCIsImlhdCI6MTc2OTY4MDc0MiwiZXhwIjoxNzcwMjg1NTQyLCJ0eXAiOiJyZWZyZXNoIiwiYXVkIjpbImV4YW1wbGUtYXBwIl19.1IwGNaCzTJYe-NqsXo9-vAiHxEaJR1wY-FwFeg4v6Oc
+
+###
+
+
+### 5.功能权限验证：查询接口（user 有权限）
+GET http://localhost:8080/api/user/query
+Authorization: Bearer {{token}}
+
+###
+
+### 6.功能权限验证：新增接口（user 无权限，应 403）
+POST http://localhost:8080/api/user/add
+Authorization: Bearer {{token}}
+
+###
+
+### 7.角色权限验证：查询接口（user 无权限，应 403）
+POST http://localhost:8080/api/admin/task
+Authorization: Bearer {{token}}
+
+###
+
+### 8. 退出接口
+POST http://localhost:8080/auth/logout
+Authorization: Bearer {{token}}
+###
+
+### 9. refresh接口
+POST http://localhost:8080/auth/refresh
+Authorization: Bearer {{refresh_token}}
+###
+
+### 10. 公开接口（应返回 200）
+GET http://localhost:8080/public/ping
+###
+
+
+
+
