@@ -1,4 +1,4 @@
-package com.demo.example.auth;
+package com.demo.example.service;
 
 import com.demo.authcenter.spi.AuthUser;
 import com.demo.authcenter.spi.AuthUserService;
@@ -7,8 +7,7 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 /**
- * Demo 用户服务（规范版）
- *
+ * 将业务用户接入 starter 的 SPI。
  * 约定：
  * - userId 是系统内唯一标识
  * - username 仅用于登录
@@ -28,7 +27,7 @@ public class DemoAuthUserService implements AuthUserService {
             return new AuthUser(
                     1L,
                     "admin",
-                    List.of("user:add", "user:query", "ROLE_ADMIN")
+                    List.of("api:add", "api:query", "ROLE_ADMIN")
             );
         }
 
@@ -36,7 +35,7 @@ public class DemoAuthUserService implements AuthUserService {
             return new AuthUser(
                     2L,
                     "user",
-                    List.of("user:query", "ROLE_USER")
+                    List.of("api:query", "ROLE_USER")
             );
         }
 
@@ -55,7 +54,7 @@ public class DemoAuthUserService implements AuthUserService {
             return new AuthUser(
                     1L,
                     "admin",
-                    List.of("user:add", "user:query", "ROLE_ADMIN")
+                    List.of("api:add", "api:query", "ROLE_ADMIN")
             );
         }
 
@@ -63,7 +62,7 @@ public class DemoAuthUserService implements AuthUserService {
             return new AuthUser(
                     2L,
                     "user",
-                    List.of("user:query", "ROLE_USER")
+                    List.of("api:query", "ROLE_USER")
             );
         }
 

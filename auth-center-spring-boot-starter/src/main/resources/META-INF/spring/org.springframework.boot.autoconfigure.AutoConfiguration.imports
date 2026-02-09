@@ -1,1 +1,2 @@
 com.demo.authcenter.autoconfig.AuthCenterAutoConfiguration
+com.demo.authcenter.autoconfig.AuthCenterMethodSecurityAutoConfiguration

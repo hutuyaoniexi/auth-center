@@ -26,11 +26,18 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
-        <!-- 引入你的鉴权 Starter -->
+        <!-- 引入鉴权 Starter -->
         <dependency>
             <groupId>com.demo</groupId>
             <artifactId>auth-center-spring-boot-starter</artifactId>
             <version>0.0.1-SNAPSHOT</version>
+        </dependency>
+
+        <!--  swagger-->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.5.0</version>
         </dependency>
 
         <!-- 测试 -->

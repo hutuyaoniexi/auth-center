@@ -1,10 +1,14 @@
-### 1. 未登录访问（应返回 401）
-GET http://localhost:8080/api/user/me
+### 0. 公开接口（应返回 200）
+GET http://localhost:8080/api/hello
+###
+
+### 1. 未登录访问（应返回 40101）
+GET http://localhost:8080/api/me
 
 ###
 
 ### 2. 携带非法 Token（应返回 401）
-GET http://localhost:8080/api/user/me
+GET http://localhost:8080/api/me
 Authorization: Bearer abc.def.xxx
 
 ###
@@ -19,6 +23,13 @@ Content-Type: application/json
   "password": "123456"
 }
 
+
+> {%
+    client.global.set("token", response.body.accessToken);
+    client.global.set("refresh_token", response.body.refreshToken);
+%}
+###
+
 ### 4.登录（admin）
 POST http://localhost:8080/auth/login
 Content-Type: application/json
@@ -28,44 +39,70 @@ Content-Type: application/json
   "password": "123456"
 }
 
-###
-@token = eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJhdXRoLWNlbnRlci1kZW1vIiwic3ViIjoiMiIsImp0aSI6ImI1ZTUyMThkLWY3NzAtNDQyMS05N2U0LTkxZmY0NWE2ZTIzOCIsImlhdCI6MTc2OTY4MjU5MCwiZXhwIjoxNzY5Njg0MzkwLCJ0eXAiOiJhY2Nlc3MiLCJhdWQiOlsiZXhhbXBsZS1hcHAiXSwidXNlcm5hbWUiOiJ1c2VyIiwicm9sZXMiOlsidXNlcjpxdWVyeSIsIlJPTEVfVVNFUiJdfQ.apDNEnyksIG_DRg6HQtu83FZUtk9ZGIINXtmG2wS6eM
-@refresh_token = eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJhdXRoLWNlbnRlci1kZW1vIiwic3ViIjoiMSIsImp0aSI6IjVhMDhkYTA0LTViMzgtNDdjNS05ZDhkLTI0NzFlMWY0MjQzZCIsImlhdCI6MTc2OTY4MDc0MiwiZXhwIjoxNzcwMjg1NTQyLCJ0eXAiOiJyZWZyZXNoIiwiYXVkIjpbImV4YW1wbGUtYXBwIl19.1IwGNaCzTJYe-NqsXo9-vAiHxEaJR1wY-FwFeg4v6Oc
+
+> {%
+    client.global.set("token", response.body.accessToken);
+    client.global.set("refresh_token", response.body.refreshToken);
+%}
 
 ###
 
-
-### 5.功能权限验证：查询接口（user 有权限）
-GET http://localhost:8080/api/user/query
-Authorization: Bearer {{token}}
-
-###
-
-### 6.功能权限验证：新增接口（user 无权限，应 403）
-POST http://localhost:8080/api/user/add
-Authorization: Bearer {{token}}
-
-###
-
-### 7.角色权限验证：查询接口（user 无权限，应 403）
-POST http://localhost:8080/api/admin/task
-Authorization: Bearer {{token}}
-
-###
-
-### 8. 退出接口
+### 5.退出
 POST http://localhost:8080/auth/logout
 Authorization: Bearer {{token}}
 ###
 
-### 9. refresh接口
+
+### 6.刷新token
 POST http://localhost:8080/auth/refresh
 Authorization: Bearer {{refresh_token}}
+
+> {%
+    client.global.set("token", response.body.accessToken);
+    client.global.set("refresh_token", response.body.refreshToken);
+%}
 ###
 
-### 10. 公开接口（应返回 200）
-GET http://localhost:8080/public/ping
+
+
+### ========== 功能权限验证 - spring注解 ==========
+### 7.admin接口（admin 有权限）
+POST http://localhost:8080/api/admin/spring
+Authorization: Bearer {{token}}
+
 ###
+
+### 8.查询接口（user、admin有权限）
+GET http://localhost:8080/api/query/spring
+Authorization: Bearer {{token}}
+
+###
+
+### 9.新增接口（user 无权限，应 403）
+POST http://localhost:8080/api/add/spring
+Authorization: Bearer {{token}}
+
+###
+
+### ========== 功能权限验证 - 自定义注解 ==========
+### 10.查询接口（admin 有权限）
+POST http://localhost:8080/api/admin/starter
+Authorization: Bearer {{token}}
+
+###
+
+### 11.新增接口（user、admin有权限）
+GET http://localhost:8080/api/query/starter
+Authorization: Bearer {{token}}
+
+###
+
+### 12.查询接口（admin 有权限）
+POST http://localhost:8080/api/add/starter
+Authorization: Bearer {{token}}
+
+###
+
 
 
 

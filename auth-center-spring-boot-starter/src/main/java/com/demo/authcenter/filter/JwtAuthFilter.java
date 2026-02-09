@@ -1,9 +1,9 @@
 package com.demo.authcenter.filter;
 
-import com.demo.authcenter.security.AuthCenterProperties;
+import com.demo.authcenter.exception.AuthErrorCodes;
 import com.demo.authcenter.security.JwtUtil;
-import com.demo.authcenter.security.TokenStore;
 import com.demo.authcenter.spi.AuthUserService;
+import com.demo.authcenter.store.TokenStore;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
@@ -14,91 +14,81 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.util.AntPathMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.Objects;
 
+/**
+ * JWT 鉴权过滤器：仅在请求携带 Bearer Token 时尝试认证并写入 SecurityContext。
+ *
+ * <p>约定：Authorization: Bearer &lt;token&gt;，sub=userId，authorities 为角色/权限字符串。</p>
+ *
+ * <p>策略：若未携带 token，则不做任何标记，按匿名请求放行，由业务侧授权规则决定是否需要认证。</p>
+ */
 public class JwtAuthFilter extends OncePerRequestFilter {
-
-    public static final String REQ_ATTR_AUTH_ERROR_CODE = "AUTH_CENTER_AUTH_ERROR_CODE";
-
-    public static final int CODE_TOKEN_MISSING = 40101;
-    public static final int CODE_TOKEN_EXPIRED = 40102;
-    public static final int CODE_TOKEN_INVALID = 40103;
-    public static final int CODE_TOKEN_BLACKLISTED = 40104;
 
     private final JwtUtil jwtUtil;
     private final TokenStore tokenStore;
     private final AuthUserService authUserService;
-    private final AuthCenterProperties props;
-
-    private final AntPathMatcher matcher = new AntPathMatcher();
 
     public JwtAuthFilter(JwtUtil jwtUtil,
                          TokenStore tokenStore,
-                         AuthUserService authUserService,
-                         AuthCenterProperties props) {
-        this.jwtUtil = jwtUtil;
-        this.tokenStore = tokenStore;
-        this.authUserService = authUserService;
-        this.props = props;
-    }
-
-    @Override
-    protected boolean shouldNotFilter(HttpServletRequest request) {
-        String path = request.getRequestURI();
-        return props.getIgnorePaths().stream().anyMatch(pattern -> matcher.match(pattern, path));
+                         AuthUserService authUserService) {
+        this.jwtUtil = Objects.requireNonNull(jwtUtil, "jwtUtil must not be null");
+        this.tokenStore = Objects.requireNonNull(tokenStore, "tokenStore must not be null");
+        this.authUserService = Objects.requireNonNull(authUserService, "authUserService must not be null");
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
             throws ServletException, IOException {
 
-        // 避免重复解析
+        // 已认证则不重复解析
         if (SecurityContextHolder.getContext().getAuthentication() != null) {
             chain.doFilter(req, res);
             return;
         }
 
+        // ✅ 无 token：不标记错误码，直接放行（交给业务授权规则决定）
         String token = jwtUtil.extractBearerToken(req.getHeader("Authorization"));
         if (token == null) {
-            req.setAttribute(REQ_ATTR_AUTH_ERROR_CODE, CODE_TOKEN_MISSING);
             chain.doFilter(req, res);
             return;
         }
 
         try {
-            // 1) 校验签名/exp/iss
             Claims claims = jwtUtil.parseAndValidate(token);
-
-            // 2) 校验 aud
             jwtUtil.validateAudience(claims);
-
-            // 3) 校验 typ=access
             jwtUtil.validateAccessType(claims);
 
-            // 4) ⭐️ 黑名单校验：jti 是否被拉黑（登出/踢下线）
             String jti = jwtUtil.getJti(claims);
             if (jti == null || jti.isBlank()) {
                 throw new IllegalArgumentException("Missing jti");
             }
             if (tokenStore.isBlacklisted(jti)) {
                 SecurityContextHolder.clearContext();
-                req.setAttribute(REQ_ATTR_AUTH_ERROR_CODE, CODE_TOKEN_BLACKLISTED);
+                mark(req, AuthErrorCodes.CODE_TOKEN_BLACKLISTED);
                 chain.doFilter(req, res);
                 return;
             }
 
-            // 5) sub=userId（强制规范）
             Long userId = jwtUtil.getUserId(claims);
             if (userId == null) {
                 throw new IllegalArgumentException("Missing or invalid sub(userId)");
             }
 
             var user = authUserService.loadByUserId(userId);
+            if (user == null) {
+                throw new IllegalArgumentException("User not found: " + userId);
+            }
 
-            var authorities = user.authorities().stream()
+            var auths = user.authorities() == null ? Collections.<String>emptyList() : user.authorities();
+            var authorities = auths.stream()
+                    .filter(Objects::nonNull)
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
                     .map(SimpleGrantedAuthority::new)
                     .toList();
 
@@ -107,17 +97,17 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         } catch (ExpiredJwtException e) {
             SecurityContextHolder.clearContext();
-            req.setAttribute(REQ_ATTR_AUTH_ERROR_CODE, CODE_TOKEN_EXPIRED);
+            mark(req, AuthErrorCodes.CODE_TOKEN_EXPIRED);
 
         } catch (JwtException | IllegalArgumentException e) {
             SecurityContextHolder.clearContext();
-            req.setAttribute(REQ_ATTR_AUTH_ERROR_CODE, CODE_TOKEN_INVALID);
-
-        } catch (Exception e) {
-            SecurityContextHolder.clearContext();
-            req.setAttribute(REQ_ATTR_AUTH_ERROR_CODE, CODE_TOKEN_INVALID);
+            mark(req, AuthErrorCodes.CODE_TOKEN_INVALID);
         }
 
         chain.doFilter(req, res);
+    }
+
+    private static void mark(HttpServletRequest req, int code) {
+        req.setAttribute(AuthErrorCodes.REQ_ATTR_AUTH_ERROR_CODE, code);
     }
 }

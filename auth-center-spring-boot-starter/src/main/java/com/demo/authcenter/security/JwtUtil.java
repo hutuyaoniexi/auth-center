@@ -1,5 +1,6 @@
 package com.demo.authcenter.security;
 
+import com.demo.authcenter.config.JwtProps;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtException;
@@ -13,11 +14,15 @@ import java.time.Instant;
 import java.util.*;
 
 /**
- * JWT 工具类（规范化：iss / aud / jti / typ(access|refresh)）
+ * JWT 工具：负责 token 的签发、解析与基础校验（签名/exp/iss）。
  *
- * 建议职责：
- * - 负责 token 的生成/解析/基础校验
- * - 业务相关的“黑名单/登出/刷新轮换”交给 TokenStore / Service 做
+ * 约定：
+ * - sub = userId
+ * - jti = token 唯一标识（用于登出/黑名单）
+ * - typ = "access" | "refresh"
+ * - aud 写入 claim "aud"（List<String>），并兼容不同 JJWT 版本的 audience 返回类型
+ *
+ * 说明：黑名单、登出、刷新轮换不在此类处理，由 TokenStore/Service 负责。
  */
 public class JwtUtil {
 
@@ -36,8 +41,8 @@ public class JwtUtil {
 
     public JwtUtil(JwtProps jwtProps) {
         this.jwtProps = Objects.requireNonNull(jwtProps, "jwtProps must not be null");
-        this.key = initKey(jwtProps.getSecret());
         validateProps(jwtProps);
+        this.key = initKey(jwtProps.getSecret());
     }
 
     private void validateProps(JwtProps props) {
@@ -56,12 +61,12 @@ public class JwtUtil {
         if (props.getClockSkewSeconds() < 0) {
             throw new IllegalArgumentException("auth.jwt.clock-skew-seconds must be >= 0");
         }
+        if (!StringUtils.hasText(props.getSecret())) {
+            throw new IllegalArgumentException("auth.jwt.secret must not be blank");
+        }
     }
 
     private SecretKey initKey(String secret) {
-        if (!StringUtils.hasText(secret)) {
-            throw new IllegalArgumentException("auth.jwt.secret must not be blank");
-        }
         byte[] bytes = secret.getBytes(StandardCharsets.UTF_8);
         // HS256 推荐至少 32 bytes；不足会导致运行期异常或安全性差
         if (bytes.length < 32) {
@@ -74,16 +79,12 @@ public class JwtUtil {
     // 生成 Token
     // =========================
 
-    /**
-     * 生成 Access Token（带 iss/aud/jti/typ=access，sub=userId）
-     */
+    /** 生成 Access Token（iss/aud/jti/typ=access，sub=userId） */
     public String generateAccessToken(Long userId, String username, Collection<String> roles) {
         return buildToken(userId, username, roles, TYP_ACCESS, jwtProps.getAccessTtlSeconds());
     }
 
-    /**
-     * 生成 Refresh Token（带 iss/aud/jti/typ=refresh，sub=userId）
-     */
+    /** 生成 Refresh Token（iss/aud/jti/typ=refresh，sub=userId） */
     public String generateRefreshToken(Long userId) {
         if (!jwtProps.isRefreshEnabled()) {
             throw new IllegalStateException("refresh is disabled by auth.jwt.refresh-enabled=false");
@@ -96,17 +97,13 @@ public class JwtUtil {
                               Collection<String> roles,
                               String typ,
                               long ttlSeconds) {
-        if (userId == null) {
-            throw new IllegalArgumentException("userId must not be null");
-        }
-        if (ttlSeconds <= 0) {
-            throw new IllegalArgumentException("ttlSeconds must be > 0");
-        }
+        if (userId == null) throw new IllegalArgumentException("userId must not be null");
+        if (ttlSeconds <= 0) throw new IllegalArgumentException("ttlSeconds must be > 0");
 
         Instant now = Instant.now();
         String jti = UUID.randomUUID().toString();
 
-        // ✅ 最稳：直接把 aud 写入 payload claim，避免不同 JJWT 版本 audience builder 行为差异
+        // aud 直接写入 payload claim，避免不同 JJWT 版本 audience builder 行为差异
         List<String> audList = new ArrayList<>(jwtProps.getAudience());
 
         var builder = Jwts.builder()
@@ -134,17 +131,7 @@ public class JwtUtil {
     // 解析 + 基础校验
     // =========================
 
-    /**
-     * 兼容你旧的 Filter 调用：jwtUtil.parse(token)
-     * 内部直接走 parseAndValidate
-     */
-    public Claims parse(String token) {
-        return parseAndValidate(token);
-    }
-
-    /**
-     * 解析并校验签名、exp、iss（aud/typ 建议额外校验）
-     */
+    /** 解析并校验签名、exp、iss（aud/typ 由调用方按需校验） */
     public Claims parseAndValidate(String token) {
         if (!StringUtils.hasText(token)) {
             throw new IllegalArgumentException("Token is blank");
@@ -162,49 +149,49 @@ public class JwtUtil {
         }
     }
 
-    /**
-     * 校验 audience：token 的 aud 必须包含 allowed 任意一个
-     */
-    public void validateAudience(Claims claims) {
-        List<String> tokenAud = extractAudience(claims);
-        List<String> allowed = jwtProps.getAudience() == null ? List.of() : jwtProps.getAudience();
+    /** 兼容旧调用：等价于 parseAndValidate */
+    public Claims parse(String token) {
+        return parseAndValidate(token);
+    }
 
+    /** 校验 audience：token 的 aud 必须命中 configured audience 任意一个 */
+    public void validateAudience(Claims claims) {
+        List<String> allowed = jwtProps.getAudience();
+        if (allowed == null || allowed.isEmpty()) {
+            // props 校验已保证非空；这里兜底避免未来被错误配置时“全拒绝”难排查
+            return;
+        }
+
+        List<String> tokenAud = extractAudience(claims);
         boolean ok = tokenAud.stream().anyMatch(allowed::contains);
         if (!ok) {
             throw new IllegalArgumentException("Invalid audience");
         }
     }
 
-    /**
-     * 校验 typ=access
-     */
+    /** 校验 typ=access */
     public void validateAccessType(Claims claims) {
-        String typ = claims.get(CLAIM_TYP, String.class);
-        if (!TYP_ACCESS.equals(typ)) {
-            throw new IllegalArgumentException("Token type is not access");
-        }
+        validateType(claims, TYP_ACCESS);
     }
 
-    /**
-     * 校验 typ=refresh
-     */
+    /** 校验 typ=refresh */
     public void validateRefreshType(Claims claims) {
+        validateType(claims, TYP_REFRESH);
+    }
+
+    private void validateType(Claims claims, String expected) {
         String typ = claims.get(CLAIM_TYP, String.class);
-        if (!TYP_REFRESH.equals(typ)) {
-            throw new IllegalArgumentException("Token type is not refresh");
+        if (!expected.equals(typ)) {
+            throw new IllegalArgumentException("Token type is not " + expected);
         }
     }
 
-    /**
-     * 取 jti（用于黑名单/登出）
-     */
+    /** 取 jti（用于黑名单/登出） */
     public String getJti(Claims claims) {
         return claims.getId();
     }
 
-    /**
-     * 取 userId（sub）
-     */
+    /** 取 userId（sub） */
     public Long getUserId(Claims claims) {
         String sub = claims.getSubject();
         if (!StringUtils.hasText(sub)) return null;
@@ -216,16 +203,24 @@ public class JwtUtil {
     }
 
     /**
-     * 从 Header "Authorization: Bearer xxx" 提取 token
+     * 从 Header "Authorization: Bearer xxx" 提取 token。
+     * - 兼容大小写：bearer/Bearer
+     * - 兼容多空格：Bearer    xxx
      */
     public String extractBearerToken(String authorizationHeader) {
         if (!StringUtils.hasText(authorizationHeader)) return null;
-        String prefix = "Bearer ";
-        if (authorizationHeader.startsWith(prefix)) {
-            String t = authorizationHeader.substring(prefix.length()).trim();
-            return t.isEmpty() ? null : t;
+
+        String h = authorizationHeader.trim();
+        String prefix = "Bearer";
+        if (!h.regionMatches(true, 0, prefix, 0, prefix.length())) {
+            return null;
         }
-        return null;
+
+        String rest = h.substring(prefix.length()).trim();
+        if (rest.startsWith(":")) { // 极少数网关会写成 Bearer:xxx
+            rest = rest.substring(1).trim();
+        }
+        return rest.isEmpty() ? null : rest;
     }
 
     // =========================
@@ -244,7 +239,7 @@ public class JwtUtil {
         List<String> fromStandard = normalizeAudienceObject(standardAudObj);
         if (!fromStandard.isEmpty()) return fromStandard;
 
-        // 2) 再从 claim map 取 aud（我们 buildToken 写入的是这个）
+        // 2) 再从 claim map 取 aud（本工具写入的是这个）
         Object aud = claims.get(CLAIM_AUD);
         return normalizeAudienceObject(aud);
     }
@@ -259,13 +254,13 @@ public class JwtUtil {
             if (c.isEmpty()) return List.of();
             List<String> list = new ArrayList<>();
             for (Object x : c) {
-                if (x != null) {
-                    String v = String.valueOf(x);
-                    if (StringUtils.hasText(v)) list.add(v);
-                }
+                if (x == null) continue;
+                String v = String.valueOf(x);
+                if (StringUtils.hasText(v)) list.add(v);
             }
             return list;
         }
+
         // 兜底：转字符串
         String v = String.valueOf(audObj);
         return StringUtils.hasText(v) ? List.of(v) : List.of();
