@@ -1,6 +1,6 @@
 package com.demo.authcenter.security;
 
-import com.demo.authcenter.config.JwtProps;
+import com.demo.authcenter.properties.JwtProps;
 import com.demo.authcenter.security.dto.JwtTokenPair;
 import com.demo.authcenter.spi.AuthUserService;
 import com.demo.authcenter.store.TokenStore;

@@ -1,6 +1,6 @@
 package com.demo.authcenter.security;
 
-import com.demo.authcenter.config.JwtProps;
+import com.demo.authcenter.properties.JwtProps;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtException;

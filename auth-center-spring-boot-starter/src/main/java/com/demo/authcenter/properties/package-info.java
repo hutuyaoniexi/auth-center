@@ -13,4 +13,4 @@
  *   <li>Properties 命名尽量体现层级：AuthCenterProperties / JwtProps</li>
  * </ul>
  */
-package com.demo.authcenter.config;
+package com.demo.authcenter.properties;

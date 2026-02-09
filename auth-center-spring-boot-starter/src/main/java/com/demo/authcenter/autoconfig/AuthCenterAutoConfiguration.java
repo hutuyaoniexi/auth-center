@@ -1,6 +1,6 @@
 package com.demo.authcenter.autoconfig;
 
-import com.demo.authcenter.config.JwtProps;
+import com.demo.authcenter.properties.JwtProps;
 import com.demo.authcenter.filter.JwtAuthFilter;
 import com.demo.authcenter.security.JwtUtil;
 import com.demo.authcenter.security.LogoutService;

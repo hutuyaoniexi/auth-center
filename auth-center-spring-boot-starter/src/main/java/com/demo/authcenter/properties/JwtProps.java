@@ -1,4 +1,4 @@
-package com.demo.authcenter.config;
+package com.demo.authcenter.properties;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
